@@ -1,25 +1,40 @@
 # library to access URL, translation title and filtering
+# coding: utf-8
 __author__ = 'mancuniancol'
-import re
 
-import xbmcaddon
+import re
+from os import path
+
 import xbmc
+import xbmcaddon
+import xbmcgui
+
+from bs4 import BeautifulSoup
 
 
 class Settings:
     def __init__(self):
+        # Objects
+        self.dialog = xbmcgui.Dialog()
+        self.pDialog = xbmcgui.DialogProgress()
         self.settings = xbmcaddon.Addon()
-        self.id_addon = self.settings.getAddonInfo('id')  # gets name
-        self.url = self.settings.getSetting('url_address')
+
+        # General information
+        self.idAddon = self.settings.getAddonInfo('ID')  # gets name
         self.icon = self.settings.getAddonInfo('icon')
-        self.name_provider = self.settings.getAddonInfo('name')  # gets name
-        self.name_provider = re.sub('.COLOR (.*?)]', '', self.name_provider.replace('[/COLOR]', ''))
-        self.language = self.settings.getSetting('language')
-        if self.language == '': self.language = 'en'
-        self.extra = self.settings.getSetting('extra')
-        self.time_noti = int(self.settings.getSetting('time_noti'))
-        max_magnets = self.settings.getSetting('max_magnets')
-        self.max_magnets = int(max_magnets) if max_magnets is not '' else 10  # max_magnets
+        self.fanart = self.settings.getAddonInfo('fanart')
+        self.path = self.settings.getAddonInfo('path')
+        self.name = self.settings.getAddonInfo('name')  # gets name
+        self.cleanName = re.sub('.COLOR (.*?)]', '', self.name.replace('[/COLOR]', ''))
+        self.value = {}  # it contains all the settings from xml file
+        with open(path.join(self.path, "resources", "settings.xml"), 'r') as fp:
+            data = fp.read()
+        soup = BeautifulSoup(data)
+        settings = soup.select("setting")
+        for setting in settings:
+            key = setting.attrs.get("id")
+            if key is not None:
+                self.value[key] = self.settings.getSetting(key)
 
 
 class Browser:
@@ -62,11 +77,11 @@ class Browser:
                 self.content = response.read()
             response.close()
             self.status = 200
-        except urllib2.URLError as e:
-            self.status = e.reason
-            result = False
         except urllib2.HTTPError as e:
             self.status = e.code
+            result = False
+        except urllib2.URLError as e:
+            self.status = e.reason
             result = False
         return result
 
@@ -109,6 +124,7 @@ class Filtering:
         self.name_provider = re.sub('.COLOR (.*?)]', '', self.name_provider.replace('[/COLOR]', ''))
         self.reason = ''
         self.title = ''
+        self.info = {}
         self.quality_allow = ['*']
         self.quality_deny = []
         self.title = ''
@@ -193,24 +209,24 @@ class Filtering:
         self.TV_allow = TV_allow
         self.TV_deny = TV_deny
 
-    def type_filtering(self, query, separator='%20'):
+    def type_filtering(self, info, separator='%20'):
         from xbmcgui import Dialog
         from urllib import quote
 
-        if '#MOVIE&FILTER' in query:
+        if 'movie' == info["type"]:
             self.use_movie()
-            query = query.replace('#MOVIE&FILTER', '')
-        elif '#TV&FILTER' in query:
+        elif 'show' == info["type"]:
             self.use_TV()
-            query = query.replace('#TV&FILTER', '')
-            query = exception(query)  # CSI series problem
-        self.title = query  # to do filtering by name
+            info["query"] = exception(info["query"])  # CSI series problem
+        elif 'anime' == info["type"]:
+            self.use_TV()
+        self.title = info["query"] + ' ' + info["extra"]  # to do filtering by name
+        self.info = info
         if self.time_noti > 0:
             dialog = Dialog()
-            dialog.notification(self.name_provider, query.title(), self.icon, self.time_noti)
+            dialog.notification(self.name_provider, info["query"].title(), self.icon, self.time_noti)
             del Dialog
-        query = quote(query.rstrip()).replace('%20', separator)
-        return query
+        return quote(info["query"].rstrip()).replace('%20', separator)
 
     def use_movie(self):
         self.quality_allow = self.movie_allow
@@ -233,7 +249,6 @@ class Filtering:
     # validate keywords
     def included(self, value, keys, strict=False):
         value = ' ' + value + ' '
-        res = False
         if '*' in keys:
             res = True
         else:
@@ -242,13 +257,16 @@ class Filtering:
                 res2 = []
                 for item in re.split('\s', key):
                     item = item.replace('?', ' ')
-                    if strict: item = ' ' + item + ' '  # it makes that strict the comparation
+                    if strict:
+                        item = ' ' + item + ' '  # it makes that strict the comparation
                     if item.upper() in value.upper():
                         res2.append(True)
                     else:
                         res2.append(False)
                 res1.append(all(res2))
             res = any(res1)
+            if self.info['type'] == 'show' and value == 'season':
+                res = True
         return res
 
     # validate size
@@ -261,7 +279,8 @@ class Filtering:
             res = True
         return res
 
-    def normalize(self, name):
+    @staticmethod
+    def normalize(name):
         from unicodedata import normalize
         import types
 
@@ -272,14 +291,16 @@ class Filtering:
         normalize_name = normalize('NFKD', unicode_name)
         return normalize_name.encode('ascii', 'ignore')
 
-    def uncode_name(self, name):  # convert all the &# codes to char, remove extra-space and normalize
+    @staticmethod
+    def uncode_name(name):  # convert all the &# codes to char, remove extra-space and normalize
         from HTMLParser import HTMLParser
 
         name = name.replace('<![CDATA[', '').replace(']]', '')
         name = HTMLParser().unescape(name.lower())
         return name
 
-    def unquote_name(self, name):  # convert all %symbols to char
+    @staticmethod
+    def unquote_name(name):  # convert all %symbols to char
         from urllib import unquote
 
         return unquote(name).decode("utf-8")
@@ -305,11 +326,11 @@ class Filtering:
         self.reason = name.replace(' - ' + self.name_provider, '') + ' ***Blocked File by'
         if self.included(name, [self.title], True):
             result = True
-            if name != None:
+            if name is not None:
                 if not self.included(name, self.quality_allow) or self.included(name, self.quality_deny):
                     self.reason += ", Keyword"
                     result = False
-            if size != None:
+            if size is not None:
                 if not self.size_clearance(size):
                     result = False
                     self.reason += ", Size"
@@ -318,14 +339,6 @@ class Filtering:
             self.reason += ", Name"
         self.reason = self.reason.replace('by,', 'by') + '***'
         return result
-
-
-# clean_html
-def clean_html(data):
-    lines = re.findall('<!--(.*?)-->', data)
-    for line in lines:
-        data = data.replace(line, '')
-    return data
 
 
 # find the name in different language
@@ -360,14 +373,14 @@ def size_int(size_txt):
     return int(size)
 
 
-class Magnet():
+class Magnet:
     def __init__(self, magnet):
         self.magnet = magnet + '&'
         # hash
-        hash = re.search('urn:btih:(.*?)&', self.magnet)
+        info_hash = re.search('urn:btih:(.*?)&', self.magnet)
         result = ''
-        if hash is not None:
-            result = hash.group(1)
+        if info_hash is not None:
+            result = info_hash.group(1)
         self.hash = result
         # name
         name = re.search('dn=(.*?)&', self.magnet)
@@ -401,44 +414,10 @@ def getlinks(page):
     result = ""
     if browser.open(page):
         content = re.findall('magnet:\?[^\'"\s<>\[\]]+', browser.content)
-        if content != None:
+        if content is not None:
             result = content[0]
         else:
             content = re.findall('http(.*?).torrent', browser.content)
-            if content != None:
+            if content is not None:
                 result = 'http' + content[0] + '.torrent'
     return result
-
-
-# function to parse table html, returning array 2D
-def table(data="", order=1):
-    table_val = []
-    if data != "":
-        # there is information
-        import re
-
-        finder = re.findall("<table(.*?)>(.*?)</table>", data, re.S)
-        if len(finder) >= order:
-            table = finder[order - 1][1]
-            finder = re.findall("<tr(.*?)>(.*?)</tr>", table, re.S)
-            for (attribut, row) in finder:
-                row_val = []
-                if "<th" in row:
-                    finder = re.findall("<th(.*?)>(.*?)</th>", row, re.S)
-                else:
-                    finder = re.findall("<td(.*?)>(.*?)</td>", row, re.S)
-                for x in range(len(finder)):
-                    row_val.append(finder[x - 1][1])
-                table_val.append(row_val)
-    return table_val
-
-
-# (attributs, text, tag
-def parse_tag(data=""):
-    finder = []
-    if data != "":
-        # there is information
-        import re
-
-        finder = re.findall("<(.*?)>(.*?)</(.*?)>", data, re.S)
-    return finder
