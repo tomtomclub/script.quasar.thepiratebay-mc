@@ -35,6 +35,8 @@ class Settings:
             key = setting.attrs.get("id")
             if key is not None:
                 self.value[key] = self.settings.getSetting(key)
+        if 'url_address' in self.value and self.value['url_address'].endswith('/'):
+            self.value['url_address'] = self.value['url_address'][:-1]
 
 
 class Browser:
@@ -51,10 +53,12 @@ class Browser:
 
         self._cookies = urllib.urlencode(payload)
 
-    def open(self, url='', language='en'):
+    def open(self, url='', language='en', payload={}):
         import urllib2
 
         result = True
+        if len(payload) > 0:
+            self.create_cookies(payload)
         if self._cookies is not None:
             req = urllib2.Request(url, self._cookies)
             self._cookies = None
@@ -361,16 +365,18 @@ def translator(imdb_id, language, extra=True):
 
 
 def size_int(size_txt):
+    sint = ignore_exception(ValueError)(int)
+    sfloat = ignore_exception(ValueError)(float)
     size_txt = size_txt.upper()
     size1 = size_txt.replace('B', '').replace('I', '').replace('K', '').replace('M', '').replace('G', '')
-    size = float(size1)
+    size = sfloat(size1)
     if 'K' in size_txt:
         size *= 1000
     if 'M' in size_txt:
         size *= 1000000
     if 'G' in size_txt:
         size *= 1e9
-    return int(size)
+    return sint(size)
 
 
 class Magnet:
@@ -412,7 +418,7 @@ def exception(title):
 def getlinks(page):
     browser = Browser()
     result = ""
-    if browser.open(page):
+    if browser.open(page.encode("UTF-8")):
         content = re.findall('magnet:\?[^\'"\s<>\[\]]+', browser.content)
         if content is not None:
             result = content[0]
@@ -421,3 +427,22 @@ def getlinks(page):
             if content is not None:
                 result = 'http' + content[0] + '.torrent'
     return result
+
+
+##http://stackoverflow.com/questions/2262333/is-there-a-built-in-or-more-pythonic-way-to-try-to-parse-a-string-to-an-integer
+def ignore_exception(IgnoreException=Exception, DefaultVal=0):
+    """ Decorator for ignoring exception from a function
+    e.g.   @ignore_exception(DivideByZero)
+    e.g.2. ignore_exception(DivideByZero)(Divide)(2/0)
+    """
+
+    def dec(function):
+        def _dec(*args, **kwargs):
+            try:
+                return function(*args, **kwargs)
+            except IgnoreException:
+                return DefaultVal
+
+        return _dec
+
+    return dec
