@@ -23,7 +23,7 @@ def extract_torrents(data):
         try:
             links = soup.table.tbody.findAll('tr')
         except:
-            links = None
+            links = []
         for link in links:
             columns = link.findAll('td')
             if len(columns) == 4:
