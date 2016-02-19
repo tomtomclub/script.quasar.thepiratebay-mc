@@ -20,7 +20,10 @@ def extract_torrents(data):
     cont = 0
     if data is not None:
         soup = BeautifulSoup(data, 'html5lib')
-        links = soup.table.tbody.findAll('tr')
+        try:
+            links = soup.table.tbody.findAll('tr')
+        except:
+            links = None
         for link in links:
             columns = link.findAll('td')
             if len(columns) == 4:
