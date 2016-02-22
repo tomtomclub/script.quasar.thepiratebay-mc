@@ -27,19 +27,20 @@ def extract_torrents(data):
         for link in links:
             columns = link.findAll('td')
             if len(columns) == 4:
-                name = columns[1].div.text  # name
+                name = columns[1].div.text.strip()  # name
                 magnet = columns[1].select('div + a')[0]["href"]  # magnet
                 size = columns[1].font.text.split(',')[1].replace('Size', '').replace('&nbsp;', ' ')  # size
-                size = common.Filtering.normalize(size)
+                size = common.Filtering.normalize(size).strip()
                 seeds = columns[2].text  # seeds
                 peers = columns[3].text  # peers
                 # info_magnet = common.Magnet(magnet)
                 if filters.verify(name, size):
                     cont += 1
-                    results.append({"name": name.strip(),
+                    # magnet = common.getlinks(magnet)
+                    results.append({"name": name,
                                     "uri": magnet,
                                     # "info_hash": info_magnet.hash,
-                                    "size": size.strip(),
+                                    "size": size,
                                     "seeds": sint(seeds),
                                     "peers": sint(peers),
                                     "language": settings.value.get("language", "en"),
@@ -94,9 +95,18 @@ def search_episode(info):
     return search_general(info)
 
 
+def search_season(info):
+    provider.log.info(info)
+    info["type"] = "show"
+    info["query"] = info['title'].encode('utf-8') + ' %s %s' % (
+        common.season_names[settings.value.get("language", "en")], info['season'])  # define query
+    return search_general(info)
+
+
 # This registers your module for use
-provider.register(search, search_movie, search_episode)
+provider.register(search, search_movie, search_episode, search_season)
 
 del settings
 del browser
 del filters
+

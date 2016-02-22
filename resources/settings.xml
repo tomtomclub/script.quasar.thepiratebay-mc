@@ -3,7 +3,7 @@
 	<category label="General">
 		<setting label="URL address (http://example.com) NO HTTPS:" type="text" id="url_address" default="http://thepiratebay.rs"/>
 		<setting label="Language for the Search" type="lsep"/>
-		<setting label="Language:" type="labelenum" id="language" values="en|de|es|fr|it|pt" default="en"/>
+		<setting label="Language:" type="labelenum" id="language" values="en|de|es|fr|it|pt|ru" default="en"/>
 		<setting label="Extra Keywords to send in the URL" type="lsep"/>
 		<setting label="Extra Keywords:" type="text" id="extra" default=""/>
 		<setting label="Notification Message" type="lsep"/>
