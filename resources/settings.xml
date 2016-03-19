@@ -6,6 +6,7 @@
 		<setting label="Language:" type="labelenum" id="language" values="en|de|es|fr|it|pt|ru" default="en"/>
 		<setting label="Extra Keywords to send in the URL" type="lsep"/>
 		<setting label="Extra Keywords:" type="text" id="extra" default=""/>
+		<setting label="32212" type="bool" id="episodes" default="false"/>
 		<setting label="Notification Message" type="lsep"/>
 		<setting label="Time (miliseconds):" type="slider" id="time_noti" default="1500" range="0,125,2000" option="int" />
 	</category>
